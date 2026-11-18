@@ -194,6 +194,9 @@ RUN set -eux; \
 # Preinstall Playwright MCP and CLI (globally) so no npx network download is needed at runtime.
 # @playwright/mcp: the browser MCP runs its playwright-mcp binary directly (db seed). `npx @playwright/mcp`
 # is not used: it queries the npm registry on every start even with the package installed globally.
+# @playwright/mcp and @playwright/cli carry their own playwright-core, which expects a different
+# Chromium build than playwright@PLAYWRIGHT_VERSION installs, so that build is installed as well
+# (second install line); without it neither can launch a browser.
 # @playwright/cli: provides playwright-cli, verified with --help right after install.
 # Then install playwright (browser management) and preinstall chromium plus its system
 # dependencies via --with-deps, so MCP/CLI work on first start inside the container
@@ -204,6 +207,7 @@ ARG PLAYWRIGHT_VERSION=1.64.1
 RUN npm install -g "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}" "@playwright/cli@${PLAYWRIGHT_CLI_VERSION}" "playwright@${PLAYWRIGHT_VERSION}" \
     && playwright-cli --help \
     && playwright install --with-deps chromium \
+    && node /usr/local/lib/node_modules/@playwright/mcp/node_modules/playwright-core/cli.js install chromium \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 # Binary compiled from source in the build stage above.

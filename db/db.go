@@ -320,11 +320,13 @@ ON CONFLICT (agent_id, var_name) DO UPDATE
 	// Launched through the installed playwright-mcp binary, not `npx
 	// @playwright/mcp`: npx asks the npm registry on every start, even with the
 	// package installed globally, so the version that runs is the registry's.
+	// --browser chromium: the default is the "chrome" channel (Google Chrome),
+	// which the image does not have; it ships Playwright's Chromium.
 	if _, err := d.Exec(`
 INSERT INTO mcp_servers(name, transport, command, args, env, enabled)
 VALUES ('browser', 'stdio', 'playwright-mcp', $1, '{}', false)
 ON CONFLICT (name) DO NOTHING`,
-		`["--headless"]`); err != nil {
+		`["--headless","--browser","chromium"]`); err != nil {
 		return fmt.Errorf("seed browser mcp: %w", err)
 	}
 	// NOTE: the placeholder ScopeSentry data-source MCP (empty URL + empty X-API-Key,

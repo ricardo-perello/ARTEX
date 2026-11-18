@@ -17,7 +17,8 @@ diff against.
 | `npm ci` in `install.sh`, `update.sh`, `build.sh` | runs lifecycle scripts (husky rewrites `core.hooksPath`) | `--ignore-scripts` |
 | `skills/api-recon/scripts/package-lock.json` | resolves from `registry.npmmirror.com` | resolves from `registry.npmjs.org` (same integrity hashes) |
 | `skills/playwright-cli/SKILL.md` | `@playwright/cli@latest` | `@playwright/cli@0.1.22` |
-| `db/db.go` browser MCP seed | `npx @playwright/mcp` (asks the npm registry on every start) | `playwright-mcp`, the binary installed in the image |
+| `db/db.go` browser MCP seed | `npx @playwright/mcp` (asks the npm registry on every start) | `playwright-mcp --browser chromium`, the binary installed in the image |
+| `Dockerfile` Playwright browsers | Chromium for `playwright` only; the MCP and CLI packages expect another build and cannot launch | both builds installed at image build time |
 
 GitHub Actions are disabled on the fork.
 
