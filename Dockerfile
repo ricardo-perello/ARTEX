@@ -192,7 +192,8 @@ RUN set -eux; \
 
 
 # Preinstall Playwright MCP and CLI (globally) so no npx network download is needed at runtime.
-# @playwright/mcp: browser MCP runs directly via `npx @playwright/mcp` (installed globally, no -y/@latest needed).
+# @playwright/mcp: the browser MCP runs its playwright-mcp binary directly (db seed). `npx @playwright/mcp`
+# is not used: it queries the npm registry on every start even with the package installed globally.
 # @playwright/cli: provides playwright-cli, verified with --help right after install.
 # Then install playwright (browser management) and preinstall chromium plus its system
 # dependencies via --with-deps, so MCP/CLI work on first start inside the container

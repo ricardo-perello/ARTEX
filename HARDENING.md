@@ -17,6 +17,7 @@ diff against.
 | `npm ci` in `install.sh`, `update.sh`, `build.sh` | runs lifecycle scripts (husky rewrites `core.hooksPath`) | `--ignore-scripts` |
 | `skills/api-recon/scripts/package-lock.json` | resolves from `registry.npmmirror.com` | resolves from `registry.npmjs.org` (same integrity hashes) |
 | `skills/playwright-cli/SKILL.md` | `@playwright/cli@latest` | `@playwright/cli@0.1.22` |
+| `db/db.go` browser MCP seed | `npx @playwright/mcp` (asks the npm registry on every start) | `playwright-mcp`, the binary installed in the image |
 
 GitHub Actions are disabled on the fork.
 
@@ -30,8 +31,10 @@ GitHub Actions are disabled on the fork.
 - Everything bbot installs when `ARTEX_WITH_BBOT=1`.
 - Local (non-Docker) mode: Norma runs `npm install -g @vscode/ripgrep`; keep `rg`
   on `PATH` in case that is a fallback for a missing ripgrep. The browser MCP
-  server, off by default, runs `npx @playwright/mcp`, which downloads the package
-  if it is not installed.
+  server, off by default, needs `playwright-mcp` on `PATH`
+  (`npm install -g @playwright/mcp@0.0.83`).
+- A database first started on upstream code keeps its `npx` browser MCP row; the
+  seed only inserts when the row is absent. Edit it under System → MCP.
 
 Go modules are covered by `go.sum` and the Go checksum database, and `web/` by
 `package-lock.json` integrity hashes.
