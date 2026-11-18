@@ -1,4 +1,7 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#
+# Fork hardening: every image is pinned by digest and every downloaded archive by
+# a sha256 written in this file. See HARDENING.md for how to bump them.
 #
 # Multi-stage build: `docker compose up -d --build` (or `docker build .`) produces
 # the complete image from source. No prebuilt binary in the build context is needed,
@@ -13,7 +16,7 @@
 # ---------------------------------------------------------------- frontend ---
 # Pinned to the Node 22 line the CI/release workflows use. On the build platform
 # only; the frontend static export is architecture-independent.
-FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS web
+FROM --platform=$BUILDPLATFORM node:22-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be39390f24dac302dc3cdf566e8ba3ab21ee AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --ignore-scripts
@@ -24,7 +27,7 @@ RUN npm run build:static
 # Pinned to the Go 1.26 line (matches go.mod and the release binaries job). The
 # binary is CGO-free, so this stage runs on the build platform and cross-compiles
 # to $TARGETARCH without QEMU.
-FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS build
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm@sha256:dc40a13b61304647ed7e5d581d246b86413dfc29d63c6d018310feb93cd98fc0 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -47,19 +50,31 @@ RUN ARTEX_SKIP_FRONTEND=1 \
 # Web-recon toolbox (drost-community take 1, #100): pinned release binaries, staged
 # on the build platform and copied into /usr/local/bin of the runtime image so hunt
 # workers can run them directly through their Bash tool. Versions pinned per tool;
-# upgrade deliberately. Each archive is verified against the checksums file of its
-# own GitHub release (exact asset name, sha256). That file comes from the same
-# release channel as the archive, so it catches corrupted or swapped downloads and
-# moved tags, not a compromised publisher. sqlmap has no release binaries: it is a
-# shallow clone of a pinned tag, checked against the expected commit.
-FROM --platform=$BUILDPLATFORM debian:bookworm-slim AS tools
+# upgrade deliberately. Each archive is verified against a sha256 pinned below
+# (copied once from the checksums file of its GitHub release), so a release asset
+# that is replaced after the pin fails the build. A version bump needs both hashes
+# bumped with it. sqlmap has no release binaries: it is a shallow clone of a pinned
+# tag, checked against the expected commit.
+FROM --platform=$BUILDPLATFORM debian:bookworm-slim@sha256:734a72b3d6142a71993b4bc580ca01d8ca687f77a2c422d96a961d3376b179bc AS tools
 ARG TARGETARCH
 ARG NUCLEI_VERSION=v3.11.1
+ARG NUCLEI_SHA256_AMD64=ea63d4ae232808cd7c6bc00d0142428e231fab59dae01042246097d195835ab6
+ARG NUCLEI_SHA256_ARM64=8044e3d9768ba0a744b2872c1a87e813006f013da97ca9f50f7661a4203bec07
 ARG HTTPX_VERSION=v1.12.0
+ARG HTTPX_SHA256_AMD64=9d8439e8b6c9aa7d1e2314817a392e00d5178da3af5652f7475f88868f418f76
+ARG HTTPX_SHA256_ARM64=fd7b123c1dfbc3d69f19f524e4eebcd6ec06b9a6cbd56813c76f11645197331e
 ARG SUBFINDER_VERSION=v2.17.0
+ARG SUBFINDER_SHA256_AMD64=a39c3e5c7a26ef3c430915c4d6cbf7716a00f26769a75e9405aba796142eba37
+ARG SUBFINDER_SHA256_ARM64=24913d49dddc1d3a5e99a4a7580da5be980959b9415b96f52c4f7f4124392190
 ARG KATANA_VERSION=v1.8.0
+ARG KATANA_SHA256_AMD64=cb027ae99d0757061b70c07a15c7a80f62c5a535ab52c4a329f80c4b0a7309d2
+ARG KATANA_SHA256_ARM64=80e269210727a855511ffac8dfb01297b2344742acec71a35e8ba4a67a90f0f2
 ARG FFUF_VERSION=v2.3.0
+ARG FFUF_SHA256_AMD64=b2a3c725fcb9da175159682f54d6e9149f2905b00d84d155e7efc5d599975ceb
+ARG FFUF_SHA256_ARM64=e2d712615d53da797ee929006e41f2df5a7960a5353133db9c150ddaa22ae4e8
 ARG DALFOX_VERSION=v3.2.4
+ARG DALFOX_SHA256_AMD64=c11cfd2f8261973f0a2a2a1eba5a147ce77712a29acfa6343f9847fb8bb7eca2
+ARG DALFOX_SHA256_ARM64=fd56b0b7da2d06868cd73b504f41d21314629feffcd5bdc97718db1c9dd2fa70
 ARG SQLMAP_VERSION=1.9.9
 ARG SQLMAP_COMMIT=cceda39208b5aad478de2c3f731df4239d9881f6
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -67,17 +82,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 RUN set -eux; \
     case "${TARGETARCH:-amd64}" in \
-      amd64) PD_ARCH=amd64; FFUF_ARCH=amd64; DALFOX_ARCH=x86_64 ;; \
-      arm64) PD_ARCH=arm64; FFUF_ARCH=arm64; DALFOX_ARCH=aarch64 ;; \
+      amd64) PD_ARCH=amd64; FFUF_ARCH=amd64; DALFOX_ARCH=x86_64; \
+        NUCLEI_SHA="$NUCLEI_SHA256_AMD64"; HTTPX_SHA="$HTTPX_SHA256_AMD64"; SUBFINDER_SHA="$SUBFINDER_SHA256_AMD64"; \
+        KATANA_SHA="$KATANA_SHA256_AMD64"; FFUF_SHA="$FFUF_SHA256_AMD64"; DALFOX_SHA="$DALFOX_SHA256_AMD64" ;; \
+      arm64) PD_ARCH=arm64; FFUF_ARCH=arm64; DALFOX_ARCH=aarch64; \
+        NUCLEI_SHA="$NUCLEI_SHA256_ARM64"; HTTPX_SHA="$HTTPX_SHA256_ARM64"; SUBFINDER_SHA="$SUBFINDER_SHA256_ARM64"; \
+        KATANA_SHA="$KATANA_SHA256_ARM64"; FFUF_SHA="$FFUF_SHA256_ARM64"; DALFOX_SHA="$DALFOX_SHA256_ARM64" ;; \
       *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
     mkdir -p /out; \
-    fetch() { base="$1"; asset="$2"; sums="$3"; name="$4"; \
+    fetch() { base="$1"; asset="$2"; want="$3"; name="$4"; \
       rm -rf /tmp/t; mkdir -p /tmp/t/x; \
       curl -fsSL "$base/$asset" -o "/tmp/t/$asset"; \
-      curl -fsSL "$base/$sums" -o /tmp/t/sums.txt; \
-      want="$(awk -v a="$asset" '$2 == a || $2 == "*" a { print $1 }' /tmp/t/sums.txt)"; \
-      if [ -z "$want" ]; then echo "no checksum entry for $asset" >&2; exit 1; fi; \
+      if [ -z "$want" ]; then echo "no pinned sha256 for $asset" >&2; exit 1; fi; \
       got="$(sha256sum "/tmp/t/$asset" | cut -d' ' -f1)"; \
       if [ "$want" != "$got" ]; then echo "checksum mismatch for $asset: want $want got $got" >&2; exit 1; fi; \
       case "$asset" in *.zip) unzip -q "/tmp/t/$asset" -d /tmp/t/x ;; *) tar -xzf "/tmp/t/$asset" -C /tmp/t/x ;; esac; \
@@ -86,50 +103,51 @@ RUN set -eux; \
       rm -rf /tmp/t; }; \
     gh="https://github.com"; \
     fetch "$gh/projectdiscovery/nuclei/releases/download/$NUCLEI_VERSION" \
-      "nuclei_${NUCLEI_VERSION#v}_linux_${PD_ARCH}.zip" "nuclei_${NUCLEI_VERSION#v}_checksums.txt" nuclei; \
+      "nuclei_${NUCLEI_VERSION#v}_linux_${PD_ARCH}.zip" "$NUCLEI_SHA" nuclei; \
     fetch "$gh/projectdiscovery/httpx/releases/download/$HTTPX_VERSION" \
-      "httpx_${HTTPX_VERSION#v}_linux_${PD_ARCH}.zip" "httpx_${HTTPX_VERSION#v}_checksums.txt" httpx; \
+      "httpx_${HTTPX_VERSION#v}_linux_${PD_ARCH}.zip" "$HTTPX_SHA" httpx; \
     fetch "$gh/projectdiscovery/subfinder/releases/download/$SUBFINDER_VERSION" \
-      "subfinder_${SUBFINDER_VERSION#v}_linux_${PD_ARCH}.zip" "subfinder_${SUBFINDER_VERSION#v}_checksums.txt" subfinder; \
+      "subfinder_${SUBFINDER_VERSION#v}_linux_${PD_ARCH}.zip" "$SUBFINDER_SHA" subfinder; \
     fetch "$gh/projectdiscovery/katana/releases/download/$KATANA_VERSION" \
-      "katana_${KATANA_VERSION#v}_linux_${PD_ARCH}.zip" "katana-${KATANA_VERSION#v}-checksums.txt" katana; \
+      "katana_${KATANA_VERSION#v}_linux_${PD_ARCH}.zip" "$KATANA_SHA" katana; \
     fetch "$gh/ffuf/ffuf/releases/download/$FFUF_VERSION" \
-      "ffuf_${FFUF_VERSION#v}_linux_${FFUF_ARCH}.tar.gz" "ffuf_${FFUF_VERSION#v}_checksums.txt" ffuf; \
+      "ffuf_${FFUF_VERSION#v}_linux_${FFUF_ARCH}.tar.gz" "$FFUF_SHA" ffuf; \
     fetch "$gh/hahwul/dalfox/releases/download/$DALFOX_VERSION" \
-      "dalfox-${DALFOX_VERSION}-linux-${DALFOX_ARCH}-musl.tar.gz" "dalfox-${DALFOX_VERSION}-linux-${DALFOX_ARCH}-musl.tar.gz.sha256" dalfox; \
+      "dalfox-${DALFOX_VERSION}-linux-${DALFOX_ARCH}-musl.tar.gz" "$DALFOX_SHA" dalfox; \
     git clone --quiet --depth 1 --branch "$SQLMAP_VERSION" https://github.com/sqlmapproject/sqlmap /opt/sqlmap; \
     commit="$(git -C /opt/sqlmap rev-parse HEAD)"; \
     if [ "$commit" != "$SQLMAP_COMMIT" ]; then echo "sqlmap commit mismatch: want $SQLMAP_COMMIT got $commit" >&2; exit 1; fi; \
     rm -rf /opt/sqlmap/.git
 
 # ---------------------------------------------------------------- runtime ---
-FROM python:3.12-slim-bookworm
+FROM python:3.12-slim-bookworm@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df
 ARG TARGETARCH
 # Common tools: ripgrep / curl / vim, plus a set of recon staples (add/remove as needed).
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates ripgrep curl wget vim git jq unzip xz-utils \
       dnsutils iputils-ping netcat-openbsd inetutils-telnet whois nmap \
     && rm -rf /var/lib/apt/lists/*
-# Node 22 from the official nodejs.org tarball, verified against its SHASUMS256.txt:
+# Node 22 from the official nodejs.org tarball, verified against the sha256 pinned
+# below (copied once from that version's SHASUMS256.txt):
 # bookworm's apt nodejs is 18, Playwright requires >=20, and 20 is end-of-life.
 # 22 matches the CI and release workflows.
 ARG NODE_VERSION=22.23.4
+ARG NODE_SHA256_AMD64=1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce
+ARG NODE_SHA256_ARM64=6287aa46b6c375d816e63ae66d024fbbfd70404825aabdfdf898a970871d2f4b
 RUN set -eux; \
     case "${TARGETARCH:-amd64}" in \
-      amd64) NODE_ARCH=x64 ;; \
-      arm64) NODE_ARCH=arm64 ;; \
+      amd64) NODE_ARCH=x64; want="$NODE_SHA256_AMD64" ;; \
+      arm64) NODE_ARCH=arm64; want="$NODE_SHA256_ARM64" ;; \
       *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
     base="https://nodejs.org/dist/v${NODE_VERSION}"; \
     asset="node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz"; \
     curl -fsSL "$base/$asset" -o "/tmp/$asset"; \
-    curl -fsSL "$base/SHASUMS256.txt" -o /tmp/SHASUMS256.txt; \
-    want="$(awk -v a="$asset" '$2 == a { print $1 }' /tmp/SHASUMS256.txt)"; \
-    if [ -z "$want" ]; then echo "no checksum entry for $asset" >&2; exit 1; fi; \
+    if [ -z "$want" ]; then echo "no pinned sha256 for $asset" >&2; exit 1; fi; \
     got="$(sha256sum "/tmp/$asset" | cut -d' ' -f1)"; \
     if [ "$want" != "$got" ]; then echo "checksum mismatch for $asset: want $want got $got" >&2; exit 1; fi; \
     tar -xJf "/tmp/$asset" -C /usr/local --strip-components=1 --no-same-owner; \
-    rm -f "/tmp/$asset" /tmp/SHASUMS256.txt; \
+    rm -f "/tmp/$asset"; \
     node --version; npm --version
 # Pinned, checksum-verified recon binaries and the sqlmap checkout from the tools stage.
 COPY --from=tools /out/ /usr/local/bin/
@@ -145,8 +163,14 @@ RUN set -eux; \
 # preinstalled (--install-all-deps) so scans never need pip at runtime, which
 # would fail under a program's egress allowlist.
 ARG BBOT_VERSION=3.0.2
+# Fork hardening: off by default. Only the bbot version is pinned; its Python
+# dependencies and everything --install-all-deps downloads are not, so the
+# install is opt-in (ARTEX_WITH_BBOT=1). Without it the bbot-recon skill and
+# the bbot ingest tool have no bbot binary to run.
+ARG ARTEX_WITH_BBOT=0
 # arm64: bbot's Chrome and retirejs's Node are x86-64; use native builds.
 RUN set -eux; \
+    if [ "$ARTEX_WITH_BBOT" != 1 ]; then echo "bbot not installed (build with ARTEX_WITH_BBOT=1 to add it)"; exit 0; fi; \
     python -m venv /opt/bbot; \
     /opt/bbot/bin/pip install --no-cache-dir "bbot==${BBOT_VERSION}"; \
     ln -s /opt/bbot/bin/bbot /usr/local/bin/bbot; \

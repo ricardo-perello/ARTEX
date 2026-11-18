@@ -376,7 +376,7 @@ gh attestation verify <zip> --repo BaaRai/ARTEX   # built by this repository's r
 ### Option 4: build the single binary from source
 
 ```bash
-cd web && npm ci && npm run build:static && cd ..
+cd web && npm ci --ignore-scripts && npm run build:static && cd ..
 cp -r web/out server/webui/dist
 CGO_ENABLED=0 go build -tags embedui -o artex ./cmd/artex
 ./start.sh
@@ -634,7 +634,7 @@ cp -r <extracted dir>/skills ./ && cp <extracted dir>/artex ./
 
 ```bash
 git pull
-cd web && npm ci && npm run build:static && cd ..
+cd web && npm ci --ignore-scripts && npm run build:static && cd ..
 cp -r web/out server/webui/dist
 CGO_ENABLED=0 go build -tags embedui -o artex ./cmd/artex
 # restart ./start.sh

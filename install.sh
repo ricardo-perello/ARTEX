@@ -27,14 +27,7 @@ ensure_docker(){
   fi
   warn "docker / docker compose not detected"
   case "$(uname -s)" in
-    Linux)
-      if [ "$(ask 'Install Docker automatically? (y/n)' y)" = y ]; then
-        curl -fsSL https://get.docker.com | sh
-        sudo usermod -aG docker "$USER" || true
-        ok "Docker installed (re-login required for the group change to take effect)"
-      else
-        die "please install docker yourself and retry"
-      fi ;;
+    Linux) die "please install Docker Engine from your distribution or https://docs.docker.com/engine/install/ and retry" ;;
     Darwin) die "on macOS please install Docker Desktop: https://www.docker.com/products/docker-desktop/" ;;
     *)      die "please install docker yourself and retry" ;;
   esac
@@ -72,7 +65,8 @@ install_local(){
       local pw; pw="$(ask 'Postgres password (press Enter for random)' "$(rand)")"
       docker run -d --name artex-pg -p 5432:5432 \
         -e POSTGRES_USER=artex -e POSTGRES_PASSWORD="$pw" -e POSTGRES_DB=artex \
-        -v artex-pg:/var/lib/postgresql/data postgres:16-alpine
+        -v artex-pg:/var/lib/postgresql/data \
+        postgres:16-alpine@sha256:81e77a4833487b8132fe4b00bedd39dc3f74b8641e387f19312a48f7de218c2e
       DB_HOST=127.0.0.1 DB_PORT=5432 DB_USER=artex DB_PASS="$pw" DB_NAME=artex DB_SSL=disable ;;
     *)
       DB_HOST="$(ask 'Database host' 127.0.0.1)"
@@ -106,7 +100,7 @@ JSON
   # embedding the frontend requires node to produce the static assets
   if command -v npm >/dev/null 2>&1; then
     info "building frontend static assets..."
-    ( cd web && npm ci && npm run build:static )
+    ( cd web && npm ci --ignore-scripts && npm run build:static )
     rm -rf server/webui/dist && cp -r web/out server/webui/dist
     info "compiling embedded single binary..."
     CGO_ENABLED=0 go build -tags embedui -trimpath -o artex ./cmd/artex
