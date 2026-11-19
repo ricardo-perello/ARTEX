@@ -49,17 +49,38 @@ cd ARTEX
 sudo scripts/vm-egress-firewall.sh
 sudo apt-get update
 sudo apt-get install -y docker.io docker-buildx docker-compose-v2
-sudo ./install.sh
+cp .env.example .env    # set POSTGRES_PASSWORD, and ARTEX_BIND_ADDR=0.0.0.0 (see below)
+sudo docker compose up -d --build
+```
+
+If the guest was installed with no network adapter, it has no DHCP configuration.
+After adding the adapter, enable it first (`ip -br link` shows the interface name):
+
+```bash
+sudo netplan set ethernets.enp0s1.dhcp4=true
+sudo netplan apply
 ```
 
 Apply the firewall before installing or starting anything else. It rejects traffic
 from the guest and from its containers to private, CGNAT (Tailscale), link-local,
 multicast and all IPv6 destinations, allows DNS to the guest's gateway only, and
 persists across reboots. `sudo scripts/vm-egress-firewall.sh --check` re-runs its
-self-test. In `install.sh` choose option 1 (all-Docker).
+self-test.
 
-The UI stays on the guest's `127.0.0.1:8787`. Reach it from a browser inside the
-guest, or forward the port deliberately; do not set `ARTEX_BIND_ADDR=0.0.0.0`.
+A server guest has no desktop, so open the UI from the host's browser at
+`http://<guest address>:8787`. That needs `ARTEX_BIND_ADDR=0.0.0.0` in the guest's
+`.env`. Behind NAT only the host can connect to the guest, and the firewall still
+lets the guest answer connections it did not start. On a guest with a bridged or
+routable address, keep the default `127.0.0.1` instead. Use a separate browser
+profile for the UI: its pages show content collected from targets.
+
+Checked on Ubuntu Server 24.04 under UTM (Apple backend, shared network): from the
+guest and from inside the ARTEX container, the host, the host's LAN gateway and
+`100.64.0.0/10` are rejected and public addresses connect; after a reboot the rules
+are loaded again and the stack restarts.
+
+On UTM's Apple backend, do not leave a serial port attached with nothing reading
+it: the guest stalls with kernel soft lockups once the port's buffer fills.
 
 ## Known gaps this fork does not close
 
