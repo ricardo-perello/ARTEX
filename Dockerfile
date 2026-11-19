@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
 #
-# Fork hardening: every image is pinned by digest and every downloaded archive by
-# a sha256 written in this file. See HARDENING.md for how to bump them.
+# Fork hardening: every image is pinned by digest, and the recon tool archives and
+# the Node tarball by a sha256 written in this file. Playwright's browser downloads
+# are not. See HARDENING.md for the full list and how to bump the pins.
 #
 # Multi-stage build: `docker compose up -d --build` (or `docker build .`) produces
 # the complete image from source. No prebuilt binary in the build context is needed,
