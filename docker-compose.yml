@@ -64,7 +64,10 @@ services:
       - ./keys:/app/keys
       # Mount skills/ from the project root into the container (overriding the image's built-in /app/skills);
       # skill changes require no image rebuild — the container reads the host copy.
-      - ./skills:/app/skills
+      # Fork hardening: read-only. The agent has create_skill / update_skill_file tools, so a
+      # writable mount lets a prompt-injected agent rewrite the tracked skill scripts in this
+      # checkout. Edit skills on the host; creating or editing them from the UI or the agent fails.
+      - ./skills:/app/skills:ro
     restart: unless-stopped
 
 volumes:

@@ -17,8 +17,10 @@ diff against.
 | `npm ci` in `install.sh`, `update.sh`, `build.sh` | runs lifecycle scripts (husky rewrites `core.hooksPath`) | `--ignore-scripts` |
 | `skills/api-recon/scripts/package-lock.json` | resolves from `registry.npmmirror.com` | resolves from `registry.npmjs.org` (same integrity hashes) |
 | `skills/playwright-cli/SKILL.md` | `@playwright/cli@latest` | `@playwright/cli@0.1.22` |
-| `db/db.go` browser MCP seed | `npx @playwright/mcp` (asks the npm registry on every start) | `playwright-mcp --browser chromium`, the binary installed in the image |
-| `Dockerfile` Playwright browsers | Chromium for `playwright` only; the MCP and CLI packages expect another build and cannot launch | both builds installed at image build time |
+| `docker-compose.yml` `./skills` mount | read-write | read-only |
+
+The browser MCP launch fix this fork carried first (BaaRai/ARTEX#329) is now upstream;
+the fork takes upstream's version of `db/db.go` and of the Playwright install step.
 
 GitHub Actions are disabled on the fork.
 
@@ -34,8 +36,26 @@ GitHub Actions are disabled on the fork.
   on `PATH` in case that is a fallback for a missing ripgrep. The browser MCP
   server, off by default, needs `playwright-mcp` on `PATH`
   (`npm install -g @playwright/mcp@0.0.83`).
-- A database first started on upstream code keeps its `npx` browser MCP row; the
-  seed only inserts when the row is absent. Edit it under System → MCP.
+
+## Known gaps this fork does not close
+
+- **Network reach.** The container is on Docker's default network: the agent's shell
+  can try any address the host can route to (host services, LAN, VPN, internet).
+  Nothing here restricts it to declared targets. Run the stack in a disposable VM
+  with an egress firewall instead of on a machine that holds credentials.
+- **`klauspost/compress` 1.18.6, GO-2026-6865.** A crafted skill ZIP uploaded by a
+  logged-in operator can panic the server. Fixed in 1.20.2; the bump is left to
+  upstream so `go.mod` stays identical. Do not upload skill archives you did not
+  make.
+- **Legacy SSE transport for remote MCP servers.** Unbounded reads, and configured
+  headers follow a server-announced URL on another origin. Only add remote MCP
+  servers you control.
+- **`ask_operator` image path.** Upstream's fix checks the path, then reopens it by
+  name, so a concurrent writer in the task directory could swap it. Matters in
+  local mode, where the path is on the host.
+
+Source for the last three: a second, independent review of upstream `c2ddd1c`
+(static, nothing was run).
 
 Go modules are covered by `go.sum` and the Go checksum database, and `web/` by
 `package-lock.json` integrity hashes.
