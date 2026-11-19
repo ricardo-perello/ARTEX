@@ -38,12 +38,37 @@ GitHub Actions are disabled on the fork.
   server, off by default, needs `playwright-mcp` on `PATH`
   (`npm install -g @playwright/mcp@0.0.83`).
 
+## Running in a VM
+
+For a fresh Ubuntu Server 24.04 guest behind NAT, with no shared folders or
+clipboard. Type these in the guest, in this order:
+
+```bash
+git clone https://github.com/ricardo-perello/ARTEX.git
+cd ARTEX
+sudo scripts/vm-egress-firewall.sh
+sudo apt-get update
+sudo apt-get install -y docker.io docker-buildx docker-compose-v2
+sudo ./install.sh
+```
+
+Apply the firewall before installing or starting anything else. It rejects traffic
+from the guest and from its containers to private, CGNAT (Tailscale), link-local,
+multicast and all IPv6 destinations, allows DNS to the guest's gateway only, and
+persists across reboots. `sudo scripts/vm-egress-firewall.sh --check` re-runs its
+self-test. In `install.sh` choose option 1 (all-Docker).
+
+The UI stays on the guest's `127.0.0.1:8787`. Reach it from a browser inside the
+guest, or forward the port deliberately; do not set `ARTEX_BIND_ADDR=0.0.0.0`.
+
 ## Known gaps this fork does not close
 
 - **Network reach.** The container is on Docker's default network: the agent's shell
   can try any address the host can route to (host services, LAN, VPN, internet).
-  Nothing here restricts it to declared targets. Run the stack in a disposable VM
-  with an egress firewall instead of on a machine that holds credentials.
+  Nothing in the Compose file restricts it to declared targets. Run the stack in a
+  disposable VM and apply `scripts/vm-egress-firewall.sh` there (next section). The
+  script blocks private, CGNAT and link-local destinations; it does not limit which
+  public addresses the agent can reach.
 - **Agent and service share one container.** The agent's shell runs beside the
   server and its signing keys, so "needs a login" does not separate the agent from
   the operator. This is why the `klauspost/compress` bump above was taken: skill ZIP
